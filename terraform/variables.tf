@@ -8,3 +8,8 @@ variable "gcp_region" {
   type        = string
   default     = "us-central1"
 }
+
+variable "kafka_allowed_source_ip" {
+  description = "IPv4 address (no CIDR suffix) allowed to reach the Kafka cluster's public endpoint. Update this if your IP changes - the cluster only accepts connections from this address."
+  type        = string
+}

@@ -1,6 +1,6 @@
 # NOTE: Managed Service for Apache Kafka's Terraform resources are a recent
 # addition to the google provider. Field names below were checked against the
-# live provider schema (v6.50.0) with `terraform validate`, but re-run that
+# live provider schema (v8.5.0) with `tofu validate`, but re-run that
 # yourself before applying in case the schema has moved on since.
 
 resource "google_project_service" "managed_kafka" {
@@ -28,6 +28,14 @@ resource "google_managed_kafka_cluster" "ticket_analyzer" {
         # Point this at your own subnet if you're not using the default VPC.
         subnet = "projects/${var.gcp_project_id}/regions/${var.gcp_region}/subnetworks/default"
       }
+
+      # The cluster is otherwise only reachable via Private Service Connect
+      # from within the connected VPC - this opens it to one external IP
+      # (e.g. for running scripts/produce_test_ticket.py from a local
+      # machine). Requires google provider >= 8.3.0.
+      public_cluster_config {
+        allowed_source_ip_ranges = ["${var.kafka_allowed_source_ip}/32"]
+      }
     }
   }
 
@@ -53,13 +61,11 @@ output "kafka_cluster_name" {
   value       = google_managed_kafka_cluster.ticket_analyzer.name
 }
 
-# Neither the google_managed_kafka_cluster resource nor any data source
-# exposes a bootstrap address attribute (checked against the live provider
-# schema - genuinely not there, not just undocumented). The real address is
-# per-cluster and includes generated id segments, e.g.:
-#   bootstrap-gjomj5xlb-tbpbb71zu3w.aba09531.us-central1.managedkafka.s.cloud.goog:9092
-# It is NOT derivable from cluster_id/project/region - fetch it after the
-# cluster reaches ACTIVE state with:
-#   gcloud managed-kafka clusters describe ticket-analyzer-kafka \
-#     --project=<project> --location=<region> --format='value(bootstrapAddress)'
-# then set it as KAFKA_BOOTSTRAP_SERVERS for the agent.
+# google_managed_kafka_cluster.bootstrap_address was added in provider
+# 8.3.0 (absent in 6.x, which this project originally pinned to - it
+# genuinely wasn't derivable from cluster_id/project/region before). It's
+# the hostname only; append :9092 for SASL or :9192 for mTLS.
+output "kafka_bootstrap_address" {
+  description = "Bootstrap address for KAFKA_BOOTSTRAP_SERVERS (SASL port 9092)."
+  value       = "${google_managed_kafka_cluster.ticket_analyzer.bootstrap_address}:9092"
+}

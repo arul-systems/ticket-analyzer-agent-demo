@@ -20,25 +20,6 @@ github: "GitHub Actions\n(CI/CD, deploy-agent.yml)" {
   shape: image
 }
 
-local: "Local dev machine" {
-  style.stroke-dash: 3
-
-  kafka: "Local Kafka broker\ndocker-compose (apache/kafka), PLAINTEXT" {
-    icon: https://icons.terrastruct.com/dev/docker.svg
-    shape: image
-  }
-
-  listener: "agent/kafka/listener.py\npolls Kafka, runs the LangGraph agent" {
-    icon: https://icons.terrastruct.com/dev/python.svg
-
-    store: "tickets.json\n(local outcome ledger)" {
-      shape: cylinder
-    }
-  }
-
-  kafka -> listener: "poll\n(KafkaConsumer)"
-}
-
 gcp: "GCP" {
   style.stroke: "#4285F4"
   style.stroke-width: 2
@@ -73,10 +54,7 @@ gcp: "GCP" {
 
   function: "Cloud Run function\nagent/kafka/cloud_function.py" {
     icon: https://icons.terrastruct.com/gcp/Products%20and%20services/Compute/Cloud%20Functions.svg
-
-    store: "tickets.json\n/tmp (ephemeral per instance)" {
-      shape: cylinder
-    }
+    shape: image
   }
 
   # Closest available icon - this set has no dedicated Vertex AI icon.
@@ -115,10 +93,6 @@ gcp: "GCP" {
   }
 }
 
-producer -> local.kafka: "publish ticket\n(PLAINTEXT)"
-producer -> gcp.kafka: "publish ticket\n(SASL_SSL / OAUTHBEARER)" {
-  style.stroke-dash: 3
-}
-local.listener -> gcp.vertexai: "triage ticket"
+producer -> gcp.kafka: "publish ticket\n(SASL_SSL / OAUTHBEARER)"
 gcp.function -> gcp.vertexai: "triage ticket"
 github -> gcp.function: "deploy code\n(gcloud functions deploy)"

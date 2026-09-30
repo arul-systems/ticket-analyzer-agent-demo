@@ -5,29 +5,24 @@ either resolves the ticket itself, assigns it to a team, or closes it as unsuppo
 off by ticket events arriving on a Kafka topic.
 
 Heads up: this is a demo, not something we run in production. It's here to show a particular
-way of building an event-driven agent — the same agent code running behind two different
-Kafka transports depending on where it's deployed, the full record riding in the event
-instead of a lookup tool, and a real (if minimal) GCP deployment. See the bottom of this doc
-for what's deliberately left out.
+way of building an event-driven agent — the full ticket record riding in the event instead of
+a lookup tool, and a real (if minimal) GCP deployment built entirely on managed/serverless
+pieces (no VM or container you have to keep running). See the bottom of this doc for what's
+deliberately left out.
 
 ## Architecture
 
 ![Architecture Diagram](docs/architecture.svg)
 
-A ticket lands on the `support-tickets` topic and the agent picks it up one of two ways,
-depending on environment:
+A ticket lands on the `support-tickets` topic on the real Managed Service for Apache Kafka
+cluster. Eventarc has no native Managed Kafka trigger source (confirmed against a live project
+— `managedkafka.googleapis.com` isn't a registered Eventarc provider), so a Kafka Connect
+Pub/Sub Sink Connector mirrors the topic into a Pub/Sub topic, and *that* fires the Eventarc
+trigger that pushes the message to `agent/kafka/cloud_function.py`, deployed as a Cloud Run
+function, which hands off to `agent/processor.py` → `agent/graph.py`.
 
-- **Local dev**: `agent/kafka/listener.py` polls a local Kafka broker (`docker-compose`) with
-  a plain `KafkaConsumer` loop.
-- **GCP**: Eventarc has no native Managed Kafka trigger source (confirmed against a live
-  project — `managedkafka.googleapis.com` isn't a registered Eventarc provider), so a Kafka
-  Connect Pub/Sub Sink Connector mirrors the topic into a Pub/Sub topic, and *that* fires the
-  Eventarc trigger that pushes the message to `agent/kafka/cloud_function.py`, deployed as a
-  Cloud Run function.
-
-Either way, both entry points decode the same wire format and hand off to the same
-`agent/processor.py` → `agent/graph.py` agent — Kafka transport is the only thing that
-changes between local and GCP.
+There's no standalone consumer process anywhere in this project — the Cloud Run function is
+the only thing that runs the agent.
 
 ## The whole ticket rides in the event
 
@@ -36,10 +31,10 @@ message *is* the ticket — subject, description, customer, product, category, a
 `agent/processor.py` drops that JSON straight into the prompt. The agent never looks anything
 up; it just reasons over what it was handed.
 
-The only local storage (`scripts/tickets.json`, via `agent/store/ticket_store.py`) is where
-the three terminal tools record their outcome — priority, status, resolution — keyed by
-ticket id. It upserts rather than requiring the ticket to already exist there, since with
-this design a ticket id can show up for the first time via Kafka with no prior record at all.
+The three terminal tools don't persist anywhere either — they just log the outcome
+(priority, status, resolution/team/reason) and return a confirmation string. For a real
+system that'd write to whatever ticketing backend issued the event; for this demo, structured
+logs (visible in Cloud Logging for the Cloud Run path) are the outcome record.
 
 ## Exactly one terminal action, every time
 
@@ -66,24 +61,34 @@ GCP), same pattern as the rest of the project's GCP access.
 
 ## Running locally
 
+There's no local Kafka broker or standalone consumer in this project —
+`scripts/produce_test_ticket.py` publishes to the real Managed Service for Apache Kafka
+cluster, and the deployed Cloud Run function is what actually processes tickets.
+
 ```bash
 uv sync
-cp .env.example .env   # fill in GCP_PROJECT_ID, run `gcloud auth application-default login`
-docker compose -f scripts/docker-compose.yml up -d
-uv run ticket-analyzer-agent-demo              # starts the polling listener
+cp .env.example .env   # fill in GCP_PROJECT_ID, KAFKA_BOOTSTRAP_SERVERS (the real cluster
+                        # address), KAFKA_SECURITY_PROTOCOL=SASL_SSL
+gcloud auth application-default login   # needed for both Vertex AI and Kafka OAUTHBEARER auth
 uv run python scripts/produce_test_ticket.py   # publishes every ticket in scripts/tickets.json
 ```
 
-The producer script works against either broker — set `KAFKA_SECURITY_PROTOCOL=SASL_SSL` and
-point `KAFKA_BOOTSTRAP_SERVERS` at a real GCP cluster to test against Managed Kafka instead of
-the local one; it switches to OAUTHBEARER auth (`agent/kafka/gcp_oauth.py`) automatically.
+`agent/kafka/gcp_oauth.py` handles OAUTHBEARER auth against the cluster - note that Managed
+Kafka's OAUTHBEARER implementation doesn't accept a bare Google access token, it wants a
+composite token wrapping it (confirmed against Google's own reference client, after a live
+auth failure). With user/ADC credentials (as opposed to a service account), you also need
+`GOOGLE_MANAGED_KAFKA_AUTH_PRINCIPAL=<your email>` set, since user credentials don't expose a
+principal email the way service account credentials do.
 
 ## Running on GCP
 
 Terraform (`terraform/`) provisions most of it:
 
 - `google_managed_kafka_cluster` / `google_managed_kafka_topic` — the `support-tickets` topic
-  on Managed Service for Apache Kafka.
+  on Managed Service for Apache Kafka. The cluster is private (Private Service Connect) by
+  default; `public_cluster_config` (provider `>= 8.3.0`, set via the `kafka_allowed_source_ip`
+  variable in `terraform.tfvars`) opens it to one external IP, e.g. for running
+  `scripts/produce_test_ticket.py` from outside the VPC.
 - `google_pubsub_topic.ticket_events` — the Pub/Sub bridge topic Eventarc actually triggers
   off (`terraform/pubsub.tf`), plus the IAM to let the Kafka Connect service agent publish to
   it and let Pub/Sub mint invocation tokens as the trigger's service account.
@@ -106,24 +111,21 @@ IAM config, so it can't accidentally drift what Terraform manages.
 
 ## What's missing, on purpose
 
-- The Managed Kafka bootstrap address isn't something Terraform can output — neither the
-  resource nor any data source exposes it (checked against the live provider schema, not
-  assumed). You fetch it by hand once the cluster is `ACTIVE`:
-  `gcloud managed-kafka clusters describe <cluster> --location=<region> --format='value(bootstrapAddress)'`.
-- The Pub/Sub Sink Connector's class name
-  (`com.google.pubsub.kafka.sink.CloudPubSubSinkConnector`, in
-  `terraform/setup-kafka-connect.sh`) is inferred by symmetry with the *source* connector
-  class Google's own `gcloud managed-kafka connectors create --help` example uses — not
-  directly confirmed against a live connect cluster.
 - The Kafka Connect cluster is a second billed Managed Kafka resource (another 3 vCPU / 3 GiB
   minimum) that exists purely to bridge around Eventarc's lack of a native Kafka source — real
-  cost and moving parts added just to keep the push/serverless model instead of running a
-  polling consumer.
-- `scripts/tickets.json` is a flat file, not a database — fine for a demo, but the Cloud Run
-  function's copy lives on ephemeral `/tmp` and doesn't persist or share across instances.
-- No automated tests — correctness so far has been checked by hand: real tickets through the
-  local Kafka transport, synthetic CloudEvents through the Cloud Run handler (no live Eventarc
-  trigger has fired against it yet).
+  cost and moving parts added just to keep everything serverless instead of running a
+  standalone consumer process somewhere.
+- The three terminal tools don't persist their outcome anywhere — no database, no file. Fine
+  for a demo where Cloud Logging is the record; a real system would write back to whatever
+  ticketing backend issued the event.
+- Claude on Vertex AI Model Garden ships with a default request quota of effectively zero for
+  new projects — `global_online_prediction_requests_per_base_model` has no allocated limit
+  until you request one in the Console (IAM & Admin → Quotas). Nothing in this repo can fix
+  that; it's a one-time manual step per project.
+- No automated tests — correctness so far has been checked by hand: the producer publishes to
+  the real cluster, and the Kafka Connect → Pub/Sub → Eventarc → Cloud Run push path is
+  confirmed to actually fire (instances scale up on message arrival). Full agent processing
+  end-to-end is still blocked on the Vertex AI quota above.
 
 All fixable, just not the point of this project.
 

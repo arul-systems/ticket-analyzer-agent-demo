@@ -108,3 +108,18 @@ resource "google_service_account_iam_member" "ci_deployer_acts_as_trigger" {
   role               = "roles/iam.serviceAccountUser"
   member             = "serviceAccount:${google_service_account.ci_deployer.email}"
 }
+
+# --no-allow-unauthenticated makes `gcloud functions deploy` manage the
+# underlying Cloud Run service's IAM policy directly (to keep it non-public),
+# which needs run.services.setIamPolicy - not included in
+# roles/cloudfunctions.developer (confirmed via `gcloud iam roles describe`;
+# it has run.services.getIamPolicy but not the set variant), and surfaced as
+# a live 403 from a real deploy. Scoped to just this Cloud Run service rather
+# than project-wide roles/run.admin.
+resource "google_cloud_run_v2_service_iam_member" "ci_deployer_manages_service_iam" {
+  project  = var.gcp_project_id
+  location = var.gcp_region
+  name     = google_cloudfunctions2_function.ticket_analyzer.name
+  role     = "roles/run.admin"
+  member   = "serviceAccount:${google_service_account.ci_deployer.email}"
+}

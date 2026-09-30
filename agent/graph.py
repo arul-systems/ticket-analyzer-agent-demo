@@ -40,10 +40,15 @@ For every ticket you process:
 
 
 def build_agent():
+    # No explicit temperature: the installed anthropic SDK's Messages.create()
+    # no longer accepts temperature/top_k/top_p as direct params (confirmed via
+    # a live TypeError), and langchain_google_vertexai only omits a param when
+    # its value is None - passing temperature=0 here survives that filter and
+    # breaks the call. Leaving it unset keeps it None and lets the model use
+    # its own default sampling behavior.
     model = ChatAnthropicVertex(
         project=settings.gcp_project_id,
         location=settings.gcp_location,
         model_name=settings.vertex_model_name,
-        temperature=0,
     )
     return create_agent(model, tools=ALL_TOOLS, system_prompt=SYSTEM_PROMPT)

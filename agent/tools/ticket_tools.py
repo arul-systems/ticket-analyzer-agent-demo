@@ -1,9 +1,10 @@
-import json
+import logging
 
 from langchain_core.tools import tool
 
 from agent.models import Priority, Team
-from agent.store import ticket_store
+
+logger = logging.getLogger(__name__)
 
 
 @tool
@@ -13,13 +14,13 @@ def auto_resolve_ticket(ticket_id: str, priority: Priority, resolution_summary: 
     workarounds, password/account access instructions) where you can give the
     customer a complete, correct resolution yourself. `resolution_summary` must
     contain the actual steps/answer sent to the customer, not just a note."""
-    ticket = ticket_store.update_ticket(
+    logger.info(
+        "Ticket %s auto-resolved. priority=%s resolution=%s",
         ticket_id,
-        status="resolved",
-        priority=priority,
-        resolution=resolution_summary,
+        priority,
+        resolution_summary,
     )
-    return f"Ticket {ticket_id} auto-resolved with priority {priority}. Ticket: {json.dumps(ticket)}"
+    return f"Ticket {ticket_id} auto-resolved with priority {priority}."
 
 
 @tool
@@ -28,13 +29,14 @@ def assign_ticket(ticket_id: str, priority: Priority, team: Team, reason: str) -
     Use this when the issue requires human judgement, access to internal
     systems, or is account/environment specific (bugs, billing disputes,
     security incidents, complex integration questions)."""
-    ticket = ticket_store.update_ticket(
+    logger.info(
+        "Ticket %s assigned to %s. priority=%s reason=%s",
         ticket_id,
-        status="assigned",
-        priority=priority,
-        resolution=f"Assigned to {team}: {reason}",
+        team,
+        priority,
+        reason,
     )
-    return f"Ticket {ticket_id} assigned to {team} with priority {priority}. Ticket: {json.dumps(ticket)}"
+    return f"Ticket {ticket_id} assigned to {team} with priority {priority}."
 
 
 @tool
@@ -42,13 +44,13 @@ def close_as_not_supported(ticket_id: str, priority: Priority, reason: str) -> s
     """Close the ticket as not supported. Use this when the request is about a
     product, feature, platform, or integration that is explicitly out of
     scope/unsupported, or is spam/not actionable."""
-    ticket = ticket_store.update_ticket(
+    logger.info(
+        "Ticket %s closed as not supported. priority=%s reason=%s",
         ticket_id,
-        status="closed_not_supported",
-        priority=priority,
-        resolution=reason,
+        priority,
+        reason,
     )
-    return f"Ticket {ticket_id} closed as not supported with priority {priority}. Ticket: {json.dumps(ticket)}"
+    return f"Ticket {ticket_id} closed as not supported with priority {priority}."
 
 
 ALL_TOOLS = [auto_resolve_ticket, assign_ticket, close_as_not_supported]

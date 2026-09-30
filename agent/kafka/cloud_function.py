@@ -1,5 +1,6 @@
-"""Entry point for running this agent as a Cloud Run function, instead of
-the polling `agent.kafka.listener` consumer.
+"""Entry point for running this agent as a Cloud Run function. This is the
+only way it runs - there's no local broker or standalone consumer process in
+this project.
 
 Eventarc has no native Managed Kafka trigger source (confirmed against a
 live project - see terraform/pubsub.tf), so the actual trigger is a Pub/Sub
@@ -10,9 +11,9 @@ iam.tf, pubsub.tf); code deploys are handled by
 needs the root main.py (re-exports handle_ticket_event) since the gcloud
 CLI hard-requires a main.py at the source root for the python312 runtime.
 
-The CloudEvent payload shape handled by `_get_message_bytes` below is a
-best-effort match for a Pub/Sub-sourced trigger - verified against a real
-Pub/Sub push envelope shape, but not yet exercised by a live trigger.
+The CloudEvent payload shape handled by `_get_message_bytes` below is
+confirmed against a live trigger - publishing a real ticket through the
+Kafka Connect -> Pub/Sub -> Eventarc chain does invoke this function.
 """
 
 import base64
