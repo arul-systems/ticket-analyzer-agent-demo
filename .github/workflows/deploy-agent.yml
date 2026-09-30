@@ -50,5 +50,4 @@ jobs:
             --runtime=python312 \
             --entry-point=handle_ticket_event \
             --source=. \
-            --set-build-env-vars=GOOGLE_FUNCTION_SOURCE=agent/kafka/cloud_function.py \
             --no-allow-unauthenticated

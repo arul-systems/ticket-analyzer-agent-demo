@@ -1,27 +1,18 @@
-"""Entry point for running this agent as a Cloud Run function triggered by
-Eventarc from a Kafka topic (Google Cloud Managed Service for Apache Kafka,
-or Confluent Cloud), instead of the polling `agent.kafka.listener` consumer.
+"""Entry point for running this agent as a Cloud Run function, instead of
+the polling `agent.kafka.listener` consumer.
 
-Deploy with, e.g.:
+Eventarc has no native Managed Kafka trigger source (confirmed against a
+live project - see terraform/pubsub.tf), so the actual trigger is a Pub/Sub
+topic that a Kafka Connect Sink Connector mirrors the Kafka topic into. The
+function's trigger/IAM/infra is provisioned by terraform/ (function.tf,
+iam.tf, pubsub.tf); code deploys are handled by
+.github/workflows/deploy-agent.yml via `gcloud functions deploy`, which
+needs the root main.py (re-exports handle_ticket_event) since the gcloud
+CLI hard-requires a main.py at the source root for the python312 runtime.
 
-    gcloud run deploy ticket-analyzer-agent \\
-        --source . \\
-        --function agent.kafka.cloud_function.handle_ticket_event \\
-        --region REGION \\
-        --no-allow-unauthenticated
-
-    gcloud eventarc triggers create ticket-analyzer-kafka-trigger \\
-        --location=REGION \\
-        --destination-run-service=ticket-analyzer-agent \\
-        --destination-run-region=REGION \\
-        --event-filters="type=google.cloud.managedkafka.topic.v1.messagePublished" \\
-        --event-filters="topic=TOPIC_ID" \\
-        --service-account=SERVICE_ACCOUNT_EMAIL
-
-NOTE: verify the exact `--event-filters type=...` value and the CloudEvent
-payload shape handled by `_get_message_bytes` below against the current
-Eventarc + Managed Service for Apache Kafka documentation before deploying -
-this is a fast-moving GA surface and field/type names may have changed.
+The CloudEvent payload shape handled by `_get_message_bytes` below is a
+best-effort match for a Pub/Sub-sourced trigger - verified against a real
+Pub/Sub push envelope shape, but not yet exercised by a live trigger.
 """
 
 import base64
