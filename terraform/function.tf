@@ -2,38 +2,8 @@
 # is why this uses google_cloudfunctions2_function rather than a plain Cloud
 # Run service - it's the only Terraform resource that supports deploying
 # from source (build_config.source) instead of a pre-built container image.
-
-resource "google_service_account" "function" {
-  project      = var.gcp_project_id
-  account_id   = "ticket-analyzer-fn"
-  display_name = "Ticket Analyzer Cloud Run function runtime identity"
-}
-
-resource "google_project_iam_member" "function_vertex_ai" {
-  project = var.gcp_project_id
-  role    = "roles/aiplatform.user"
-  member  = "serviceAccount:${google_service_account.function.email}"
-}
-
-resource "google_service_account" "trigger" {
-  project      = var.gcp_project_id
-  account_id   = "ticket-analyzer-trigger"
-  display_name = "Eventarc identity that invokes the Ticket Analyzer function"
-}
-
-resource "google_project_iam_member" "trigger_event_receiver" {
-  project = var.gcp_project_id
-  role    = "roles/eventarc.eventReceiver"
-  member  = "serviceAccount:${google_service_account.trigger.email}"
-}
-
-resource "google_cloudfunctions2_function_iam_member" "trigger_can_invoke" {
-  project        = var.gcp_project_id
-  location       = var.gcp_region
-  cloud_function = google_cloudfunctions2_function.ticket_analyzer.name
-  role           = "roles/run.invoker"
-  member         = "serviceAccount:${google_service_account.trigger.email}"
-}
+#
+# Service accounts and IAM bindings for this function live in iam.tf.
 
 # Placeholder package used only to create the function; real code is deployed
 # by CI (e.g. `gcloud functions deploy` / `gcloud run deploy --source`).
@@ -87,27 +57,23 @@ resource "google_cloudfunctions2_function" "ticket_analyzer" {
     }
   }
 
-  # NOTE: `event_type` and the `event_filters` attribute names below are a
-  # best-effort guess for the Managed Kafka event source - I could not verify
-  # them against a live project. Before applying, confirm both with:
-  #   gcloud eventarc providers describe managedkafka.googleapis.com/Topic \
-  #     --location=<region>
-  # and adjust `attribute` names/values to match what that command reports.
+  # Triggers off the Pub/Sub bridge topic (see pubsub.tf), not Kafka directly -
+  # Eventarc has no Managed Kafka source. Verified against the live provider:
+  # `gcloud eventarc providers describe pubsub.googleapis.com` confirms this
+  # event type and that `type` is the only filterable attribute (set
+  # implicitly via event_type/pubsub_topic, no event_filters block needed).
   event_trigger {
     trigger_region        = var.gcp_region
-    event_type            = "google.cloud.managedkafka.topic.v1.messagePublished"
+    event_type            = "google.cloud.pubsub.topic.v1.messagePublished"
+    pubsub_topic          = google_pubsub_topic.ticket_events.id
     retry_policy          = "RETRY_POLICY_RETRY"
     service_account_email = google_service_account.trigger.email
-
-    event_filters {
-      attribute = "topic"
-      value     = google_managed_kafka_topic.support_tickets.topic_id
-    }
   }
 
   depends_on = [
-    google_managed_kafka_topic.support_tickets,
     google_project_iam_member.trigger_event_receiver,
+    google_pubsub_topic_iam_member.connect_publisher,
+    google_service_account_iam_member.pubsub_can_mint_trigger_tokens,
   ]
 
   lifecycle {

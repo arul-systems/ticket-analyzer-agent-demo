@@ -44,8 +44,8 @@ resource "google_managed_kafka_topic" "support_tickets" {
   cluster  = google_managed_kafka_cluster.ticket_analyzer.cluster_id
   location = var.gcp_region
 
-  partition_count    = 3
-  replication_factor = 3
+  partition_count    = 1
+  replication_factor = 1
 }
 
 output "kafka_cluster_name" {
@@ -53,13 +53,13 @@ output "kafka_cluster_name" {
   value       = google_managed_kafka_cluster.ticket_analyzer.name
 }
 
-# The google_managed_kafka_cluster resource does not expose a bootstrap
-# address attribute (checked against the live provider schema). Managed
-# Service for Apache Kafka's documented bootstrap address format is:
-#   bootstrap.<cluster_id>.<region>.managedkafka.<project_id>.cloud.goog:9092
-# Verify this against the current "Connect a client" docs before using it -
-# confirm it, then set it as KAFKA_BOOTSTRAP_SERVERS for the agent.
-output "kafka_bootstrap_address_guess" {
-  description = "Best-effort bootstrap address per GCP's documented naming convention - verify before use."
-  value       = "bootstrap.ticket-analyzer-kafka.${var.gcp_region}.managedkafka.${var.gcp_project_id}.cloud.goog:9092"
-}
+# Neither the google_managed_kafka_cluster resource nor any data source
+# exposes a bootstrap address attribute (checked against the live provider
+# schema - genuinely not there, not just undocumented). The real address is
+# per-cluster and includes generated id segments, e.g.:
+#   bootstrap-gjomj5xlb-tbpbb71zu3w.aba09531.us-central1.managedkafka.s.cloud.goog:9092
+# It is NOT derivable from cluster_id/project/region - fetch it after the
+# cluster reaches ACTIVE state with:
+#   gcloud managed-kafka clusters describe ticket-analyzer-kafka \
+#     --project=<project> --location=<region> --format='value(bootstrapAddress)'
+# then set it as KAFKA_BOOTSTRAP_SERVERS for the agent.

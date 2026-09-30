@@ -1,0 +1,124 @@
+# Architecture diagram for the ticket analyzer agent demo.
+#
+# Render with: d2 docs/architecture.d2 docs/architecture.svg
+#
+# Icons are pulled from https://icons.terrastruct.com (Terrastruct's hosted D2 icon set).
+# That set has no icon for Apache Kafka (generic or GCP-specific) or for GCP Eventarc, and
+# no Vertex AI icon (the closest match is "AI Platform", Vertex AI's pre-rebrand name) - see
+# the inline notes below for where a substitute icon or plain box was used instead of a
+# faked/incorrect one.
+
+direction: right
+
+producer: "scripts/produce_test_ticket.py\n(dev/test tool, not a real ticketing system)" {
+  icon: https://icons.terrastruct.com/dev/python.svg
+  shape: image
+}
+
+github: "GitHub Actions\n(CI/CD, deploy-agent.yml)" {
+  icon: https://icons.terrastruct.com/dev/github.svg
+  shape: image
+}
+
+local: "Local dev machine" {
+  style.stroke-dash: 3
+
+  kafka: "Local Kafka broker\ndocker-compose (apache/kafka), PLAINTEXT" {
+    icon: https://icons.terrastruct.com/dev/docker.svg
+    shape: image
+  }
+
+  listener: "agent/kafka/listener.py\npolls Kafka, runs the LangGraph agent" {
+    icon: https://icons.terrastruct.com/dev/python.svg
+
+    store: "tickets.json\n(local outcome ledger)" {
+      shape: cylinder
+    }
+  }
+
+  kafka -> listener: "poll\n(KafkaConsumer)"
+}
+
+gcp: "GCP" {
+  style.stroke: "#4285F4"
+  style.stroke-width: 2
+
+  # No Kafka icon (generic or GCP-specific) exists in this icon set. Kafka is an
+  # Apache Software Foundation project, so the ASF feather logo is used here
+  # rather than an unrelated or fabricated icon.
+  kafka: "Managed Service for Apache Kafka\nticket-analyzer-kafka / support-tickets\nSASL_SSL + OAUTHBEARER" {
+    icon: https://icons.terrastruct.com/dev/apache.svg
+    shape: image
+  }
+
+  # No Terraform resource exists for Managed Kafka Connect clusters/connectors
+  # (checked against the live provider schema) - provisioned by hand via
+  # terraform/setup-kafka-connect.sh, not by `terraform apply`.
+  connect: "Kafka Connect cluster\nticket-analyzer-connect (Pub/Sub Sink Connector)" {
+    icon: https://icons.terrastruct.com/dev/apache.svg
+    shape: image
+  }
+
+  pubsub: "Cloud Pub/Sub\nticket-events (bridge topic)" {
+    icon: https://icons.terrastruct.com/gcp/Products%20and%20services/Data%20Analytics/Cloud%20PubSub.svg
+    shape: image
+  }
+
+  # Eventarc has no native Managed Kafka trigger source (confirmed via
+  # `gcloud eventarc providers list` - managedkafka.googleapis.com isn't a
+  # registered provider). It triggers off the Pub/Sub bridge topic instead.
+  eventarc: "Eventarc trigger\ngoogle.cloud.pubsub.topic.v1.messagePublished" {
+    shape: rectangle
+  }
+
+  function: "Cloud Run function\nagent/kafka/cloud_function.py" {
+    icon: https://icons.terrastruct.com/gcp/Products%20and%20services/Compute/Cloud%20Functions.svg
+
+    store: "tickets.json\n/tmp (ephemeral per instance)" {
+      shape: cylinder
+    }
+  }
+
+  # Closest available icon - this set has no dedicated Vertex AI icon.
+  vertexai: "Vertex AI Model Garden\nClaude Sonnet 5.5 (ChatAnthropicVertex)" {
+    icon: https://icons.terrastruct.com/gcp/Products%20and%20services/AI%20and%20Machine%20Learning/AI%20Platform.svg
+    shape: image
+  }
+
+  storage: "Cloud Storage\nfunction source bucket" {
+    icon: https://icons.terrastruct.com/gcp/Products%20and%20services/Storage/Cloud%20Storage.svg
+    shape: image
+  }
+
+  fn_sa: "ticket-analyzer-fn\nroles/aiplatform.user" {
+    icon: https://icons.terrastruct.com/gcp/Products%20and%20services/Security/Cloud%20IAM.svg
+    shape: image
+  }
+
+  trigger_sa: "ticket-analyzer-trigger\nroles/eventarc.eventReceiver, run.invoker" {
+    icon: https://icons.terrastruct.com/gcp/Products%20and%20services/Security/Cloud%20IAM.svg
+    shape: image
+  }
+
+  kafka -> connect: "reads via\nSink Connector"
+  connect -> pubsub: "publish"
+  pubsub -> eventarc: "topic event"
+  eventarc -> function: "push invoke"
+  storage -> function: "source\n(placeholder; real code deployed by CI)" {
+    style.stroke-dash: 3
+  }
+  fn_sa -> function: "runtime identity" {
+    style.stroke-dash: 3
+  }
+  trigger_sa -> eventarc: "invokes as" {
+    style.stroke-dash: 3
+  }
+}
+
+producer -> local.kafka: "publish ticket\n(PLAINTEXT)"
+producer -> gcp.kafka: "publish ticket\n(SASL_SSL / OAUTHBEARER)" {
+  style.stroke-dash: 3
+}
+local.listener -> gcp.vertexai: "triage ticket"
+gcp.function -> gcp.vertexai: "triage ticket"
+github -> gcp.function: "deploy code\n(gcloud functions deploy)"
