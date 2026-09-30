@@ -97,3 +97,14 @@ resource "google_service_account_iam_member" "ci_deployer_acts_as_build_sa" {
   role               = "roles/iam.serviceAccountUser"
   member             = "serviceAccount:${google_service_account.ci_deployer.email}"
 }
+
+# Redeploying a function with an existing Eventarc trigger re-submits the
+# trigger's service_account_email too, so the deployer needs Service Account
+# User on it as well - confirmed via a live 403 from `gcloud functions
+# deploy` naming exactly this SA (Google's generic docs only mention the
+# runtime and build service accounts).
+resource "google_service_account_iam_member" "ci_deployer_acts_as_trigger" {
+  service_account_id = google_service_account.trigger.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${google_service_account.ci_deployer.email}"
+}
