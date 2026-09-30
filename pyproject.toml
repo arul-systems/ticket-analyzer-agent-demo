@@ -1,0 +1,27 @@
+[project]
+name = "ticket-analyzer-agent-demo"
+version = "0.1.0"
+description = "Add your description here"
+authors = [
+    { name = "arul-systems", email = "ravi.shankar@arulsystems.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic[vertex]>=1.9.0",
+    "functions-framework>=3.10.2",
+    "kafka-python>=3.0.11",
+    "langchain>=1.4.3",
+    "langchain-google-vertexai>=3.2.4",
+    "python-dotenv>=1.2.3",
+]
+
+[project.scripts]
+ticket-analyzer-agent-demo = "agent:main"
+
+[build-system]
+requires = ["uv_build>=0.12.19,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "agent"
+module-root = ""

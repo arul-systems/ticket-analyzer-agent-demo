@@ -1,0 +1,54 @@
+name: Deploy agent
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "agent/**"
+      - ".github/workflows/deploy-agent.yml"
+
+concurrency:
+  group: deploy-agent
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  GCP_REGION: us-central1
+  FUNCTION_NAME: ticket-analyzer-agent
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+
+      - name: Export requirements.txt
+        run: uv export --no-dev --no-hashes --frozen --no-emit-project -o requirements.txt
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      # Terraform (see terraform/function.tf) owns the function's trigger,
+      # IAM, and infra config. This step only pushes new code - omitting
+      # --trigger-* flags on a redeploy leaves the existing Eventarc trigger
+      # untouched.
+      - name: Deploy to Cloud Run function
+        run: |
+          gcloud functions deploy "$FUNCTION_NAME" \
+            --gen2 \
+            --project="${{ secrets.GCP_PROJECT_ID }}" \
+            --region="$GCP_REGION" \
+            --runtime=python312 \
+            --entry-point=handle_ticket_event \
+            --source=. \
+            --set-build-env-vars=GOOGLE_FUNCTION_SOURCE=agent/kafka/cloud_function.py \
+            --no-allow-unauthenticated
