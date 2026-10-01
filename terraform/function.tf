@@ -26,6 +26,13 @@ resource "google_storage_bucket_object" "placeholder" {
   source = data.archive_file.placeholder.output_path
 }
 
+resource "google_storage_bucket" "ticket_results" {
+  project                     = var.gcp_project_id
+  name                        = "${var.gcp_project_id}-ticket-analyzer-results"
+  location                    = var.gcp_region
+  uniform_bucket_level_access = true
+}
+
 resource "google_cloudfunctions2_function" "ticket_analyzer" {
   project  = var.gcp_project_id
   name     = "ticket-analyzer-agent"
@@ -45,15 +52,21 @@ resource "google_cloudfunctions2_function" "ticket_analyzer" {
 
   service_config {
     service_account_email = google_service_account.function.email
-    available_memory      = "512Mi"
+    available_memory      = "1Gi"
+    available_cpu         = "1"
     timeout_seconds       = 60
     min_instance_count    = 0
-    max_instance_count    = 10
+    max_instance_count    = 2
+    # One request per instance, so max_instance_count is a hard cap on
+    # concurrent ticket processing (2 instances x 1 request each = 2
+    # concurrent), not just a ceiling on billed instances.
+    max_instance_request_concurrency = 1
 
     environment_variables = {
       GCP_PROJECT_ID    = var.gcp_project_id
       GCP_LOCATION      = var.gcp_region
       VERTEX_MODEL_NAME = "gemini-2.5-pro"
+      RESULTS_BUCKET    = google_storage_bucket.ticket_results.name
     }
   }
 

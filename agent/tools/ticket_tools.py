@@ -3,6 +3,7 @@ import logging
 from langchain_core.tools import tool
 
 from agent.models import Priority, Team
+from agent.results import write_ticket_result
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,15 @@ def auto_resolve_ticket(ticket_id: str, priority: Priority, resolution_summary: 
         priority,
         resolution_summary,
     )
+    write_ticket_result(
+        ticket_id,
+        {
+            "ticket_id": ticket_id,
+            "status": "resolved",
+            "priority": priority,
+            "resolution_summary": resolution_summary,
+        },
+    )
     return f"Ticket {ticket_id} auto-resolved with priority {priority}."
 
 
@@ -36,6 +46,16 @@ def assign_ticket(ticket_id: str, priority: Priority, team: Team, reason: str) -
         priority,
         reason,
     )
+    write_ticket_result(
+        ticket_id,
+        {
+            "ticket_id": ticket_id,
+            "status": "assigned",
+            "priority": priority,
+            "team": team,
+            "reason": reason,
+        },
+    )
     return f"Ticket {ticket_id} assigned to {team} with priority {priority}."
 
 
@@ -49,6 +69,15 @@ def close_as_not_supported(ticket_id: str, priority: Priority, reason: str) -> s
         ticket_id,
         priority,
         reason,
+    )
+    write_ticket_result(
+        ticket_id,
+        {
+            "ticket_id": ticket_id,
+            "status": "closed_not_supported",
+            "priority": priority,
+            "reason": reason,
+        },
     )
     return f"Ticket {ticket_id} closed as not supported with priority {priority}."
 

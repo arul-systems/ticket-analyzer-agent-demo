@@ -28,10 +28,11 @@ message *is* the ticket — subject, description, customer, product, category, a
 `agent/processor.py` drops that JSON straight into the prompt. The agent never looks anything
 up; it just reasons over what it was handed.
 
-The three terminal tools don't persist anywhere either — they just log the outcome
-(priority, status, resolution/team/reason) and return a confirmation string. For a real
-system that'd write to whatever ticketing backend issued the event; for this demo, structured
-logs (visible in Cloud Logging for the Cloud Run path) are the outcome record.
+Each of the three terminal tools (`agent/tools/ticket_tools.py`) also writes its outcome
+(priority, status, resolution/team/reason) as a JSON file to the results bucket — one file per
+ticket, named `<ticket_id>.json`, via `agent/results.py`. Reprocessing a ticket overwrites its
+file. For a real system this would instead (or additionally) write back to whatever ticketing
+backend issued the event.
 
 ## Exactly one terminal action, every time
 
@@ -77,10 +78,13 @@ Terraform (`terraform/`) provisions all of it:
   Eventarc triggers off (`terraform/pubsub.tf`).
 - `google_cloudfunctions2_function` (branded "Cloud Run functions", same API either way) with
   an Eventarc trigger on that Pub/Sub topic, plus two purpose-scoped service accounts:
-  `ticket-analyzer-fn` (`roles/aiplatform.user`, so the function can call Vertex) and
-  `ticket-analyzer-trigger` (`roles/eventarc.eventReceiver` + `run.invoker`, so Eventarc can
-  invoke it). Pub/Sub's own service agent is granted `roles/iam.serviceAccountTokenCreator` on
-  the trigger's service account so it can mint the OIDC tokens that invoke Cloud Run.
+  `ticket-analyzer-fn` (`roles/aiplatform.user` to call Vertex, `roles/storage.objectCreator`
+  scoped to the results bucket below) and `ticket-analyzer-trigger`
+  (`roles/eventarc.eventReceiver` + `run.invoker`, so Eventarc can invoke it). Pub/Sub's own
+  service agent is granted `roles/iam.serviceAccountTokenCreator` on the trigger's service
+  account so it can mint the OIDC tokens that invoke Cloud Run.
+- `google_storage_bucket.ticket_results` (`terraform/storage.tf`) — where the function writes
+  one `<ticket_id>.json` result file per processed ticket.
 - A GCS bucket holding a placeholder deploy — Terraform only creates the function, it doesn't
   own the code.
 
@@ -94,9 +98,9 @@ IAM config, so it can't accidentally drift what Terraform manages.
 
 ## What's missing, on purpose
 
-- The three terminal tools don't persist their outcome anywhere — no database, no file. Fine
-  for a demo where Cloud Logging is the record; a real system would write back to whatever
-  ticketing backend issued the event.
+- The outcome lands as a JSON file in a bucket, not in a real ticketing system — fine for a
+  demo; a real system would write back to whatever backend issued the event instead of (or in
+  addition to) GCS.
 - Claude on Vertex AI Model Garden ships with a default request quota of effectively zero for
   new projects — `global_online_prediction_requests_per_base_model` has no allocated limit
   until you request one in the Console (IAM & Admin → Quotas). Nothing in this repo can fix

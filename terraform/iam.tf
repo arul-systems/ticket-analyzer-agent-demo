@@ -16,6 +16,14 @@ resource "google_project_iam_member" "function_vertex_ai" {
   member  = "serviceAccount:${google_service_account.function.email}"
 }
 
+# Scoped to just the results bucket (terraform/storage.tf) rather than a
+# project-wide storage role.
+resource "google_storage_bucket_iam_member" "function_writes_results" {
+  bucket = google_storage_bucket.ticket_results.name
+  role   = "roles/storage.objectCreator"
+  member = "serviceAccount:${google_service_account.function.email}"
+}
+
 # --- Eventarc trigger identity ---
 
 resource "google_service_account" "trigger" {
