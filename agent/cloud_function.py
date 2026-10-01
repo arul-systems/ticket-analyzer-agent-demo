@@ -12,16 +12,18 @@ CLI hard-requires a main.py at the source root for the python312 runtime.
 """
 
 import base64
+import json
 import logging
+from typing import Any, Optional
 
 import functions_framework
 from cloudevents.http import CloudEvent
 
-from agent.parsing import extract_ticket_data_from_bytes
 from agent.processor import process_ticket
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
+
 
 def _extract_ticket_data_from_bytes(raw_value: bytes) -> Optional[dict[str, Any]]:
     """Parse a full ticket record out of a raw Pub/Sub message body. The
@@ -34,6 +36,7 @@ def _extract_ticket_data_from_bytes(raw_value: bytes) -> Optional[dict[str, Any]
     if isinstance(payload, dict) and "id" in payload:
         return payload
     return None
+
 
 @functions_framework.cloud_event
 def handle_ticket_event(cloud_event: CloudEvent) -> None:

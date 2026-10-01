@@ -31,6 +31,15 @@ jobs:
       - name: Export requirements.txt
         run: uv export --no-dev --no-hashes --frozen --no-emit-project -o requirements.txt
 
+      # gcloud functions deploy uploads the whole --source dir as-is - stage
+      # just what the function needs (agent/, main.py, requirements.txt)
+      # rather than shipping terraform/, docs/, scripts/, etc.
+      - name: Stage deploy source
+        run: |
+          mkdir deploy-src
+          cp -r agent deploy-src/
+          cp main.py requirements.txt deploy-src/
+
       - uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
@@ -49,5 +58,5 @@ jobs:
             --region="$GCP_REGION" \
             --runtime=python312 \
             --entry-point=handle_ticket_event \
-            --source=. \
+            --source=deploy-src \
             --no-allow-unauthenticated
