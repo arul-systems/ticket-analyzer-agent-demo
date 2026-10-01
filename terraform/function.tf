@@ -53,7 +53,7 @@ resource "google_cloudfunctions2_function" "ticket_analyzer" {
     environment_variables = {
       GCP_PROJECT_ID    = var.gcp_project_id
       GCP_LOCATION      = var.gcp_region
-      VERTEX_MODEL_NAME = "claude-sonnet-5-5"
+      VERTEX_MODEL_NAME = "gemini-2.5-pro"
     }
   }
 

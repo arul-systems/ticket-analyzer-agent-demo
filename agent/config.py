@@ -27,7 +27,7 @@ def load_settings() -> Settings:
         kafka_security_protocol=os.getenv("KAFKA_SECURITY_PROTOCOL", "PLAINTEXT"),
         gcp_project_id=os.getenv("GCP_PROJECT_ID", ""),
         gcp_location=os.getenv("GCP_LOCATION", "us-central1"),
-        vertex_model_name=os.getenv("VERTEX_MODEL_NAME", "claude-sonnet-5-5"),
+        vertex_model_name=os.getenv("VERTEX_MODEL_NAME", "gemini-2.5-pro"),
         tickets_store_path=Path(
             os.getenv("TICKETS_STORE_PATH", str(PROJECT_ROOT / "scripts" / "tickets.json"))
         ),

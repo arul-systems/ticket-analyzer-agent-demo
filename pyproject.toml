@@ -7,7 +7,6 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "anthropic[vertex]>=1.9.0",
     "functions-framework>=3.10.2",
     "kafka-python>=3.0.11",
     "langchain>=1.4.3",

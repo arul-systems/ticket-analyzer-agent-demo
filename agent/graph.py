@@ -1,5 +1,5 @@
 from langchain.agents import create_agent
-from langchain_google_vertexai.model_garden import ChatAnthropicVertex
+from langchain_google_vertexai import ChatVertexAI
 
 from agent.config import settings
 from agent.tools import ALL_TOOLS
@@ -40,15 +40,15 @@ For every ticket you process:
 
 
 def build_agent():
-    # No explicit temperature: the installed anthropic SDK's Messages.create()
-    # no longer accepts temperature/top_k/top_p as direct params (confirmed via
-    # a live TypeError), and langchain_google_vertexai only omits a param when
-    # its value is None - passing temperature=0 here survives that filter and
-    # breaks the call. Leaving it unset keeps it None and lets the model use
-    # its own default sampling behavior.
-    model = ChatAnthropicVertex(
+    # ChatVertexAI is deprecated in favor of langchain_google_genai's
+    # ChatGoogleGenerativeAI as of LangChain 3.2 (removal targeted for 4.0),
+    # but that package defaults to API-key auth rather than the ADC/Vertex
+    # pattern used everywhere else in this project - staying on ChatVertexAI
+    # (confirmed working) until that's verified to support the same auth.
+    model = ChatVertexAI(
         project=settings.gcp_project_id,
         location=settings.gcp_location,
         model_name=settings.vertex_model_name,
+        temperature=0,
     )
     return create_agent(model, tools=ALL_TOOLS, system_prompt=SYSTEM_PROMPT)
