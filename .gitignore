@@ -4,5 +4,6 @@
 .venv
 __pycache__
 .env.example
+.env
 
 ticket-analyzer-ci-key.json

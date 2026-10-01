@@ -11,9 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 @dataclass(frozen=True)
 class Settings:
-    kafka_bootstrap_servers: str
-    kafka_topic: str
-    kafka_security_protocol: str
+    pubsub_topic: str
     gcp_project_id: str
     gcp_location: str
     vertex_model_name: str
@@ -22,9 +20,7 @@ class Settings:
 
 def load_settings() -> Settings:
     return Settings(
-        kafka_bootstrap_servers=os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"),
-        kafka_topic=os.getenv("KAFKA_TICKET_TOPIC", "support-tickets"),
-        kafka_security_protocol=os.getenv("KAFKA_SECURITY_PROTOCOL", "PLAINTEXT"),
+        pubsub_topic=os.getenv("PUBSUB_TICKET_TOPIC", "support-tickets"),
         gcp_project_id=os.getenv("GCP_PROJECT_ID", ""),
         gcp_location=os.getenv("GCP_LOCATION", "us-central1"),
         vertex_model_name=os.getenv("VERTEX_MODEL_NAME", "gemini-2.5-pro"),

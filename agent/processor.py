@@ -37,6 +37,7 @@ def process_ticket(ticket_data: dict[str, Any]) -> str:
             ]
         }
     )
+
     final_message = result["messages"][-1]
     summary = final_message.content
     logger.info("Processed ticket %s: %s", ticket_id, summary)

@@ -57,22 +57,21 @@ resource "google_cloudfunctions2_function" "ticket_analyzer" {
     }
   }
 
-  # Triggers off the Pub/Sub bridge topic (see pubsub.tf), not Kafka directly -
-  # Eventarc has no Managed Kafka source. Verified against the live provider:
-  # `gcloud eventarc providers describe pubsub.googleapis.com` confirms this
-  # event type and that `type` is the only filterable attribute (set
-  # implicitly via event_type/pubsub_topic, no event_filters block needed).
+  # Triggers off the support-tickets Pub/Sub topic (see pubsub.tf). Verified
+  # against the live provider: `gcloud eventarc providers describe
+  # pubsub.googleapis.com` confirms this event type and that `type` is the
+  # only filterable attribute (set implicitly via event_type/pubsub_topic, no
+  # event_filters block needed).
   event_trigger {
     trigger_region        = var.gcp_region
     event_type            = "google.cloud.pubsub.topic.v1.messagePublished"
-    pubsub_topic          = google_pubsub_topic.ticket_events.id
+    pubsub_topic          = google_pubsub_topic.support_tickets.id
     retry_policy          = "RETRY_POLICY_RETRY"
     service_account_email = google_service_account.trigger.email
   }
 
   depends_on = [
     google_project_iam_member.trigger_event_receiver,
-    google_pubsub_topic_iam_member.connect_publisher,
     google_service_account_iam_member.pubsub_can_mint_trigger_tokens,
   ]
 

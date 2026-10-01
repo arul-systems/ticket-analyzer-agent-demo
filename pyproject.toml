@@ -8,7 +8,7 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "functions-framework>=3.10.2",
-    "kafka-python>=3.0.11",
+    "google-cloud-pubsub>=2.31.1",
     "langchain>=1.4.3",
     "langchain-google-vertexai>=3.2.4",
     "python-dotenv>=1.2.3",

@@ -3,56 +3,45 @@
 # Render with: d2 docs/architecture.d2 docs/architecture.svg
 #
 # Icons are pulled from https://icons.terrastruct.com (Terrastruct's hosted D2 icon set).
-# That set has no icon for Apache Kafka (generic or GCP-specific) or for GCP Eventarc, and
-# no Vertex AI icon (the closest match is "AI Platform", Vertex AI's pre-rebrand name) - see
-# the inline notes below for where a substitute icon or plain box was used instead of a
-# faked/incorrect one.
+# That set has no icon for GCP Eventarc and no Vertex AI icon (the closest match is
+# "AI Platform", Vertex AI's pre-rebrand name) - see the inline notes below for where a
+# substitute icon or plain box was used instead of a faked/incorrect one.
 
 direction: right
 
-producer: "scripts/produce_test_ticket.py\n(dev/test tool, not a real ticketing system)" {
-  icon: https://icons.terrastruct.com/dev/python.svg
-  shape: image
-}
+# Groups the external tools so they sit together. No border or fill.
+external: "" {
+  style.stroke-width: 0
+  style.fill: transparent
+  grid-rows: 2
+  grid-gap: 40
 
-github: "GitHub Actions\n(CI/CD, deploy-agent.yml)" {
-  icon: https://icons.terrastruct.com/dev/github.svg
-  shape: image
+  github: "GitHub Actions\n(CI/CD, deploy-agent.yml)" {
+    icon: https://icons.terrastruct.com/dev/github.svg
+    shape: image
+  }
+
+  producer: "scripts/produce_test_ticket.py\n(dev/test tool, not a real ticketing system)" {
+    icon: https://icons.terrastruct.com/dev/python.svg
+    shape: image
+  }
 }
 
 gcp: "GCP" {
   style.stroke: "#4285F4"
   style.stroke-width: 2
 
-  # No Kafka icon (generic or GCP-specific) exists in this icon set. Kafka is an
-  # Apache Software Foundation project, so the ASF feather logo is used here
-  # rather than an unrelated or fabricated icon.
-  kafka: "Managed Service for Apache Kafka\nticket-analyzer-kafka / support-tickets\nSASL_SSL + OAUTHBEARER" {
-    icon: https://icons.terrastruct.com/dev/apache.svg
-    shape: image
-  }
-
-  # No Terraform resource exists for Managed Kafka Connect clusters/connectors
-  # (checked against the live provider schema) - provisioned by hand via
-  # terraform/setup-kafka-connect.sh, not by `terraform apply`.
-  connect: "Kafka Connect cluster\nticket-analyzer-connect (Pub/Sub Sink Connector)" {
-    icon: https://icons.terrastruct.com/dev/apache.svg
-    shape: image
-  }
-
-  pubsub: "Cloud Pub/Sub\nticket-events (bridge topic)" {
+  pubsub: "Cloud Pub/Sub\nsupport-tickets (topic)" {
     icon: https://icons.terrastruct.com/gcp/Products%20and%20services/Data%20Analytics/Cloud%20PubSub.svg
     shape: image
   }
 
-  # Eventarc has no native Managed Kafka trigger source (confirmed via
-  # `gcloud eventarc providers list` - managedkafka.googleapis.com isn't a
-  # registered provider). It triggers off the Pub/Sub bridge topic instead.
+  # No Eventarc icon exists in this icon set, so it's a plain labeled box.
   eventarc: "Eventarc trigger\ngoogle.cloud.pubsub.topic.v1.messagePublished" {
     shape: rectangle
   }
 
-  function: "Cloud Run function\nagent/kafka/cloud_function.py" {
+  function: "Cloud Run function\nagent/cloud_function.py" {
     icon: https://icons.terrastruct.com/gcp/Products%20and%20services/Compute/Cloud%20Functions.svg
     shape: image
   }
@@ -63,12 +52,17 @@ gcp: "GCP" {
     shape: image
   }
 
+  results: "Cloud Storage\nticket-results bucket\n(priority + decision per ticket)" {
+    icon: https://icons.terrastruct.com/gcp/Products%20and%20services/Storage/Cloud%20Storage.svg
+    shape: image
+  }
+
   storage: "Cloud Storage\nfunction source bucket" {
     icon: https://icons.terrastruct.com/gcp/Products%20and%20services/Storage/Cloud%20Storage.svg
     shape: image
   }
 
-  fn_sa: "ticket-analyzer-fn\nroles/aiplatform.user" {
+  fn_sa: "ticket-analyzer-fn\nroles/aiplatform.user,\nroles/storage.objectCreator" {
     icon: https://icons.terrastruct.com/gcp/Products%20and%20services/Security/Cloud%20IAM.svg
     shape: image
   }
@@ -78,10 +72,10 @@ gcp: "GCP" {
     shape: image
   }
 
-  kafka -> connect: "reads via\nSink Connector"
-  connect -> pubsub: "publish"
   pubsub -> eventarc: "topic event"
   eventarc -> function: "push invoke"
+  function -> vertexai: "triage ticket"
+  function -> results: "write result\n(JSON)"
   storage -> function: "source\n(placeholder; real code deployed by CI)" {
     style.stroke-dash: 3
   }
@@ -93,6 +87,5 @@ gcp: "GCP" {
   }
 }
 
-producer -> gcp.kafka: "publish ticket\n(SASL_SSL / OAUTHBEARER)"
-gcp.function -> gcp.vertexai: "triage ticket"
-github -> gcp.function: "deploy code\n(gcloud functions deploy)"
+external.producer -> gcp.pubsub: "publish ticket\n(ADC auth)"
+external.github -> gcp.function: "deploy code\n(gcloud functions deploy)"

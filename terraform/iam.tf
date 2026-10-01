@@ -44,16 +44,7 @@ resource "google_cloud_run_v2_service_iam_member" "trigger_can_invoke" {
   member   = "serviceAccount:${google_service_account.trigger.email}"
 }
 
-# --- Kafka -> Pub/Sub bridge IAM (see pubsub.tf for the topic itself) ---
-
-# Lets the Managed Kafka Connect cluster's service agent publish mirrored
-# messages onto the bridge topic.
-resource "google_pubsub_topic_iam_member" "connect_publisher" {
-  project = var.gcp_project_id
-  topic   = google_pubsub_topic.ticket_events.name
-  role    = "roles/pubsub.publisher"
-  member  = "serviceAccount:service-${data.google_project.current.number}@gcp-sa-managedkafka.iam.gserviceaccount.com"
-}
+# --- Eventarc <- Pub/Sub trigger IAM (see pubsub.tf for the topic itself) ---
 
 # Pub/Sub-sourced Eventarc triggers invoke Cloud Run via a Pub/Sub push
 # subscription, which mints an OIDC token as the trigger's service account.
